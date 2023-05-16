@@ -31,9 +31,12 @@ def get_models():
 # Returns a generator object yielding incoming fragments of GPT call. 
 def call_gpt(cfg):
   response = openai.ChatCompletion.create(model=cfg['model'], messages=cfg['chat']['conv'], stream=True)
+  compl = ""
   for chunk in response:
     msg = chunk["choices"][0]["delta"].get('content','\n')
+    compl += msg
     yield msg
+  add_msg(cfg["chat"]["conv"], "assistant", compl)
 
 #### Handling the generator.
 # Print generator to standard output.
@@ -51,11 +54,17 @@ def resp_str(gen):
 def add_msg(conv, role, msg):
   conv.append({"role": role, "content": msg})
 
+def init_chat(cfg):
+  add_msg(cfg["chat"]["conv"], "system", cfg["sys_prompt"])
+
+def chat_sys(cfg, msg):
+  add_msg(cfg["chat"]["conv"], "system", msg)
+
 def chat(cfg, resp_handler, msg):
   add_msg(cfg["chat"]["conv"], "user", msg)
   resp_handler(call_gpt(cfg))
 
-ch = lambda x : chat(default_config, resp_stoud_md, x)
+ch = (lambda x : chat(default_config, resp_stoud_md, x))
 
 # def resp_file(cfg, path, msg)
 #   with open(path, 'rw+'):
