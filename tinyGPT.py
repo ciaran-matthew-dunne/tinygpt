@@ -7,17 +7,20 @@ import re
 import openai
 
 history = [
-  {"name": "Foo", "conv": []}, 
-  {"name": "Bar", "conv": []}, 
+  {"name": "Foo", "conv": []},
+  {"name": "Bar", "conv": []},
   {"name": "Baz", "conv": []}
 ]
 
-# A *configuration* is a dict-triple of a string, a chat, and a system message. 
+# A *configuration* is a dict-triple of a string, a chat, and a system message.
 default_config = {
   "model": "gpt-3.5-turbo",
   "chat":  history[0],
-  "sys_prompt": "You are a chatbot." 
+  "sys_prompt": "You are a chatbot."
 }
+
+def add_msg(conv, role, msg):
+  conv.append({"role": role, "content": msg})
 
 ##### API interaction.
 def auth_api() :
@@ -28,32 +31,29 @@ auth_api()
 def get_models():
   return [ mdl["id"] for mdl in openai.Model.list()['data'] ]
 
-# Returns a generator object yielding incoming fragments of GPT call. 
+# Returns a generator object yielding incoming fragments of GPT call.
 def call_gpt(cfg):
   response = openai.ChatCompletion.create(model=cfg['model'], messages=cfg['chat']['conv'], stream=True)
-  compl = ""
   for chunk in response:
     msg = chunk["choices"][0]["delta"].get('content','\n')
-    compl += msg
     yield msg
-  add_msg(cfg["chat"]["conv"], "assistant", compl)
 
 #### Handling the generator.
 # Print generator to standard output.
 def resp_stoud_md(gen):
   print("```")
+  compl = ""
   for m in gen:
+    compl += m
     print(m, end='',flush=True)
   print("\n")
+  return compl
 
 # Convert generator to string (i.e., no streaming).
 def resp_str(gen):
   return ''.join(gen)
 
 ## Conversation management.
-def add_msg(conv, role, msg):
-  conv.append({"role": role, "content": msg})
-
 def init_chat(cfg):
   add_msg(cfg["chat"]["conv"], "system", cfg["sys_prompt"])
 
@@ -62,8 +62,9 @@ def chat_sys(cfg, msg):
 
 def chat(cfg, resp_handler, msg):
   add_msg(cfg["chat"]["conv"], "user", msg)
-  resp_handler(call_gpt(cfg))
-
+  resp = resp_handler(call_gpt(cfg))
+  add_msg(cfg["chat"]["conv"], "assistant", resp)
+  
 ch = (lambda x : chat(default_config, resp_stoud_md, x))
 
 # def resp_file(cfg, path, msg)
