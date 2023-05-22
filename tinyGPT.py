@@ -6,78 +6,36 @@ import time
 import re
 import openai
 
-history = [
-  {"name": "Foo", "conv": []},
-  {"name": "Bar", "conv": []},
-  {"name": "Baz", "conv": []}
-]
-
-# A *configuration* is a dict-triple of a string, a chat, and a system message.
-default_config = {
-  "model": "gpt-3.5-turbo",
-  "chat":  history[0],
-  "sys_prompt": "You are a chatbot."
-}
-
-def add_msg(conv, role, msg):
-  conv.append({"role": role, "content": msg})
-
 ##### API interaction.
 def auth_api() :
   openai.api_key = os.getenv("OPENAI_KEY")
-auth_api()
 
-# Return list of available models
 def get_models():
   return [ mdl["id"] for mdl in openai.Model.list()['data'] ]
 
+def add_msg(chat, role, msg):
+  chat.append({"role": role, "content": msg})
+
 # Returns a generator object yielding incoming fragments of GPT call.
-def call_gpt(cfg):
-  response = openai.ChatCompletion.create(model=cfg['model'], messages=cfg['chat']['conv'], stream=True)
+# When generator is finished, the response is added to the chat.
+def complete_chat(chat, model):
+  response = openai.ChatCompletion.create(model=model, messages=chat, stream=True)
+  compl = ""
   for chunk in response:
     msg = chunk["choices"][0]["delta"].get('content','\n')
+    compl += msg
     yield msg
+  add_msg(chat, "assistant", compl)
 
-#### Handling the generator.
-# Print generator to standard output.
-def resp_stoud_md(gen):
+def chat_stream(chat, msg):
+  add_msg(chat, "user", msg)
+  gen = complete_chat(chat, "gpt-3.5-turbo")
   print("```")
-  compl = ""
   for m in gen:
-    compl += m
     print(m, end='',flush=True)
   print("\n")
-  return compl
 
-# Convert generator to string (i.e., no streaming).
-def resp_str(gen):
-  return ''.join(gen)
-
-## Conversation management.
-def init_chat(cfg):
-  add_msg(cfg["chat"]["conv"], "system", cfg["sys_prompt"])
-
-def chat_sys(cfg, msg):
-  add_msg(cfg["chat"]["conv"], "system", msg)
-
-def chat(cfg, resp_handler, msg):
-  add_msg(cfg["chat"]["conv"], "user", msg)
-  resp = resp_handler(call_gpt(cfg))
-  add_msg(cfg["chat"]["conv"], "assistant", resp)
+sys.ps1 = '''```python\n>> ''' # Hack for ST4 markdown highlighting
+auth_api()
   
-ch = (lambda x : chat(default_config, resp_stoud_md, x))
-
-# def resp_file(cfg, path, msg)
-#   with open(path, 'rw+'):
-
-# def chat_file(cfg, path):
-#   with open(path, "r") as f:
-#     lines = f.read()
-#     match = re.compile(r"\*-([\s\S]*?)-\*").search(lines)
-#     prompt = match.group(1)
-#     n = lines.count("\n", 0, match.start()) + 1
-#   chat(cfg, lambda g : resp_file(path, n, g), prompt)
-
-# Hack for sublimetext syntax markdown highlighting
-sys.ps1 = '''```python
->> '''
+  
